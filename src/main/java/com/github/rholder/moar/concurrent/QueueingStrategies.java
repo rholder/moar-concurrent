@@ -21,9 +21,9 @@ public class QueueingStrategies {
      * @param dequeueHint                    after this many dequeue operations, signal the JVM to run a
      *                                       garbage collection
      */
-    public static <E> QueueingStrategy<E> newHeapQueueingStrategy(double percentOfHeapBeforeFlowControl,
+    public static <V> QueueingStrategy<V> newHeapQueueingStrategy(double percentOfHeapBeforeFlowControl,
                                                                   long maxDelay,
                                                                   long dequeueHint) {
-        return new HeapQueueingStrategy<E>(percentOfHeapBeforeFlowControl, maxDelay, dequeueHint);
+        return new HeapQueueingStrategy<V>(percentOfHeapBeforeFlowControl, maxDelay, dequeueHint);
     }
 }
