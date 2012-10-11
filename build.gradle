@@ -54,13 +54,13 @@ artifacts {
 
 dependencies {
     // junit testing
-    testCompile "junit:junit:4.1"
+    testCompile "junit:junit:4.8.2"
     testCompile "org.mockito:mockito-all:1.9.0"
 }
 
 // enable Gradle Wrapper support for bootstrapping with specific version
 task wrapper(type: Wrapper) {
-    gradleVersion = '1.0-rc-1'
+    gradleVersion = '1.2'
 }
 
 //********* artifact signing *********
@@ -87,13 +87,13 @@ uploadArchives {
                 }
 
                 pom.project {
-                    name 'logsnatch'
+                    name 'moar-concurrent'
                     packaging 'jar'
                     description "This module contains a collection of useful builders and concurrency classes to assist in modeling complex or overly tweakable concurrent processing pipelines."
                     url 'http://rholder.github.com'
 
                     scm {
-                        url 'scm:git@github.com:rholder/logsnatch.git'
+                        url 'scm:git@github.com:rholder/moar-concurrent.git'
                         connection 'scm:git@github.com:rholder/moar-concurrent.git'
                         developerConnection 'scm:git@github.com:rholder/moar-concurrent.git'
                     }
