@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/rholder/moar-concurrent.png)](https://travis-ci.org/rholder/moar-concurrent)
+
 This module contains a collection of useful builders and concurrency classes to
 assist in modeling complex or overly tweakable concurrent processing pipelines.
 
