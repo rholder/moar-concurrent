@@ -30,5 +30,5 @@ to a max of 5000 ms, garbage collecting after every 10000 dequeues.
 Javadoc can be found [here](http://rholder.github.com/moar-concurrent/).
 
 ##License
-The guava-retrying module is released under version 2.0 of the
+The moar-concurrent module is released under version 2.0 of the
 [Apache License](http://www.apache.org/licenses/LICENSE-2.0).
