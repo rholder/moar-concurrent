@@ -124,29 +124,29 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
 
     @Override
     public void execute(final Runnable command) {
+        // wrap the Runnable such that we can collect profiling on the given tasks
         threadPoolExecutor.execute(new Runnable() {
             @Override
             public void run() {
-                long start = System.nanoTime();
+                Thread thisThread = Thread.currentThread();
+                long startTime = System.nanoTime();
+                long startCpu = THREAD_MX_BEAN.getThreadCpuTime(thisThread.getId());
                 try {
                     command.run();
                 } finally {
-                    long totalTime = System.nanoTime() - start;
-                    Thread thisThread = Thread.currentThread();
                     Tracking tracking = liveThreads.get(thisThread);
-                    long taskCpuTime = THREAD_MX_BEAN.getThreadCpuTime(thisThread.getId());
+                    long totalCpuTime = THREAD_MX_BEAN.getThreadCpuTime(thisThread.getId()) - startCpu;
+                    long totalTime = System.nanoTime() - startTime;
                     if(tracking == null) {
                         // this is an untracked thread, add tracking
                         tracking = new Tracking();
-                        tracking.avgWaitTime = totalTime;
-                        tracking.avgCpuTime = 0; // TODO this is unseeded to begin with, do we need a seed value from new Thread start?
-                        tracking.taskCount = 1;
+                        tracking.avgTotalTime = totalTime;
+                        tracking.avgCpuTime = totalCpuTime;
                         liveThreads.put(thisThread, tracking);
                     } else {
-                        // compute cumulative moving averages, see https://en.wikipedia.org/wiki/Moving_average
-                        tracking.taskCount++;
-                        tracking.avgWaitTime += (totalTime - tracking.avgWaitTime) / tracking.taskCount;
-                        tracking.avgCpuTime += (taskCpuTime - tracking.avgCpuTime) / tracking.taskCount;
+                        // compute exponential moving averages, see http://en.wikipedia.org/wiki/Exponential_smoothing
+                        tracking.avgTotalTime += 0.75 * (totalTime - tracking.avgTotalTime);
+                        tracking.avgCpuTime += 0.75 * (totalCpuTime - tracking.avgCpuTime);
                     }
                 }
             }
@@ -170,7 +170,7 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
                                 // thread is dead or otherwise hosed
                                 threads.remove(e);
                             } else {
-                                liveAvgTimeTotal += e.getValue().avgWaitTime;
+                                liveAvgTimeTotal += e.getValue().avgTotalTime;
                                 liveAvgCpuTotal += e.getValue().avgCpuTime;
                                 liveCount++;
                             }

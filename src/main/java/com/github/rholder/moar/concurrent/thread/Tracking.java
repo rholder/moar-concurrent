@@ -21,7 +21,6 @@ package com.github.rholder.moar.concurrent.thread;
  */
 public class Tracking {
     // TODO making these volatile to ensure consistency adds unreasonable overhead, test read-after-write cases more to determine if it's "good enough"
-    public long taskCount = 0;
-    public long avgWaitTime = 0;
+    public long avgTotalTime = 0;
     public long avgCpuTime = 0;
 }

@@ -33,14 +33,58 @@ public class BenchMarkTest {
 
     private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
 
+    private static final int TOTAL_TASKS = 50;
+
     @Ignore("ad-hoc profiling")
     @Test
-    public void withoutProfiling() throws InterruptedException {
+    public void cpuBoundWithoutProfiling() throws InterruptedException {
+        withoutProfiling(new TaskCreator() {
+            @Override
+            public Runnable create() {
+                return new CpuWorkerSim();
+            }
+        });
+    }
+
+    @Ignore("ad-hoc profiling")
+    @Test
+    public void cpuBoundWithBalancing() throws InterruptedException {
+        withBalancingThreadPoolExecutor(new TaskCreator() {
+            @Override
+            public Runnable create() {
+                return new CpuWorkerSim();
+            }
+        });
+    }
+
+    @Ignore("ad-hoc profiling")
+    @Test
+    public void blockingWithoutProfiling() throws InterruptedException {
+        withoutProfiling(new TaskCreator() {
+            @Override
+            public Runnable create() {
+                return new BlockingWorkerSim(0, 15000, new CpuWorkerSim());
+            }
+        });
+    }
+
+    @Ignore("ad-hoc profiling")
+    @Test
+    public void blockingWithBalancing() throws InterruptedException {
+        withBalancingThreadPoolExecutor(new TaskCreator() {
+            @Override
+            public Runnable create() {
+                return new BlockingWorkerSim(0, 15000, new CpuWorkerSim());
+            }
+        });
+    }
+
+    public void withoutProfiling(TaskCreator taskCreator) throws InterruptedException {
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeEnabled());
         long now = System.nanoTime();
-        ExecutorService executorService = Executors.newFixedThreadPool(100);
-        for(int i = 0; i < 10000; i++) {
-            executorService.submit(new CpuWorkerSim());
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        for(int i = 0; i < TOTAL_TASKS; i++) {
+            executorService.submit(taskCreator.create());
         }
 
         executorService.shutdown();
@@ -48,34 +92,7 @@ public class BenchMarkTest {
         System.out.println(((System.nanoTime() - now) / 1000000) + " ms");
     }
 
-    @Ignore("ad-hoc profiling")
-    @Test
-    public void withProfiling() throws InterruptedException {
-        THREAD_MX_BEAN.setThreadCpuTimeEnabled(true);
-        long now = System.nanoTime();
-        ExecutorService executorService = Executors.newFixedThreadPool(100);
-        for(int i = 0; i < 10000; i++) {
-            executorService.submit(new CpuWorkerSim() {
-                @Override
-                public void run() {
-                    long start = THREAD_MX_BEAN.getCurrentThreadCpuTime();
-                    try {
-                        super.run();
-                    } finally {
-                        long total = THREAD_MX_BEAN.getCurrentThreadCpuTime() - start;
-                    }
-                }
-            });
-        }
-
-        executorService.shutdown();
-        executorService.awaitTermination(10, TimeUnit.MINUTES);
-        System.out.println(((System.nanoTime() - now) / 1000000) + " ms");
-    }
-
-    @Ignore("ad-hoc profiling")
-    @Test
-    public void balanceTest1() throws InterruptedException {
+    public void withBalancingThreadPoolExecutor(TaskCreator taskCreator) throws InterruptedException {
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeEnabled());
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeSupported());
         long now = System.nanoTime();
@@ -101,8 +118,8 @@ public class BenchMarkTest {
         t.setDaemon(true);
         t.start();
 
-        for(int i = 0; i < 10000; i++) {
-            executorService.submit(new CpuWorkerSim());
+        for(int i = 0; i < TOTAL_TASKS; i++) {
+            executorService.submit(taskCreator.create());
         }
 
         executorService.shutdown();
@@ -113,22 +130,38 @@ public class BenchMarkTest {
     public static class CpuWorkerSim implements Runnable {
         @Override
         public void run() {
-            for(int i = 0; i < 10000; i++) {
+            for(int i = 0; i < 35 * 20000; i++) {
                 int a = ThreadLocalRandom.current().nextInt();
                 double b = Math.pow(a, 61) * Math.pow(a, 13);
             }
         }
     }
-// TODO flush this out
-//    public static class IOWorkerSim implements Runnable {
-//
-//        public IOWorkerSim(long minWait, long maxWait) {
-//
-//        }
-//
-//        @Override
-//        public void run() {
-//
-//        }
-//    }
+
+    public static class BlockingWorkerSim implements Runnable {
+
+        public long minWait;
+        public long maxWait;
+        public Runnable runnable;
+
+        public BlockingWorkerSim(long minWait, long maxWait, Runnable runnable) {
+            this.minWait = minWait;
+            this.maxWait = maxWait;
+            this.runnable = runnable;
+        }
+
+        @Override
+        public void run() {
+            try {
+                // simulate blocking call by sleeping
+                Thread.sleep(ThreadLocalRandom.current().nextLong(minWait, maxWait));
+                runnable.run();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public interface TaskCreator {
+        public Runnable create();
+    }
 }
