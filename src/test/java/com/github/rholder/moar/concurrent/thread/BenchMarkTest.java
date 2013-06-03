@@ -33,7 +33,8 @@ public class BenchMarkTest {
 
     private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
 
-    private static final int TOTAL_TASKS = 50;
+    private static final int TOTAL_TASKS = 500;
+    private static final long MAX_WAIT = 15000;
 
     @Ignore("ad-hoc profiling")
     @Test
@@ -63,7 +64,7 @@ public class BenchMarkTest {
         withoutProfiling(new TaskCreator() {
             @Override
             public Runnable create() {
-                return new BlockingWorkerSim(0, 15000, new CpuWorkerSim());
+                return new BlockingWorkerSim(0, MAX_WAIT, new CpuWorkerSim());
             }
         });
     }
@@ -74,15 +75,31 @@ public class BenchMarkTest {
         withBalancingThreadPoolExecutor(new TaskCreator() {
             @Override
             public Runnable create() {
-                return new BlockingWorkerSim(0, 15000, new CpuWorkerSim());
+                return new BlockingWorkerSim(0, MAX_WAIT, new CpuWorkerSim());
             }
         });
     }
 
     public void withoutProfiling(TaskCreator taskCreator) throws InterruptedException {
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeEnabled());
+
+        // collect CPU time for the CpuWorkerSim
+        long profileStart = THREAD_MX_BEAN.getCurrentThreadCpuTime();
+        new CpuWorkerSim().run();
+        long profileEnd = THREAD_MX_BEAN.getCurrentThreadCpuTime();
+
+        // use average of random wait between tasks
+        long wait = MAX_WAIT / 2;
+        long cpu = (profileEnd - profileStart) / 1000000;
+        System.out.println(wait);
+        System.out.println(cpu);
+
+        // optimal threads in pool computed as N * U * (1 + W/C)
+        int optimalPoolSize = (int) Math.ceil(Runtime.getRuntime().availableProcessors() * 1.0 * (1 + wait/cpu));
+        System.out.println("Using " + optimalPoolSize);
+
         long now = System.nanoTime();
-        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        ExecutorService executorService = Executors.newFixedThreadPool(optimalPoolSize); // 112?
         for(int i = 0; i < TOTAL_TASKS; i++) {
             executorService.submit(taskCreator.create());
         }
@@ -97,7 +114,7 @@ public class BenchMarkTest {
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeSupported());
         long now = System.nanoTime();
 
-        ThreadPoolExecutor tpe = new ThreadPoolExecutor(10, 10, 10, TimeUnit.MINUTES, new LinkedBlockingDeque<Runnable>());
+        ThreadPoolExecutor tpe = new ThreadPoolExecutor(10, 200, 10, TimeUnit.MINUTES, new LinkedBlockingDeque<Runnable>());
         final BalancingThreadPoolExecutor executorService = new BalancingThreadPoolExecutor(tpe, 1.0f, 4000);
         Thread t = new Thread(new Runnable() {
             @Override
