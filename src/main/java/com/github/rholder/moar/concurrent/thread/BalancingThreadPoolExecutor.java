@@ -65,6 +65,7 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
     }
 
     // TODO add regularly recurring balance() call thread
+    // TODO balance after N total tasks
     public void balance() {
         // only try to balance when we're not terminating
         if(!isTerminated()) {
@@ -72,11 +73,12 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
             long totalTime = getAvgThreadTotalTime();
             long waitTime = totalTime - cpuTime;
 
-            // if waitTime per thread isn't at least 100 ms, then just assume no I/O bound
-            waitTime = waitTime > 100000000 ? waitTime : 0;
+            // if waitTime per thread isn't at least 50 ms, then just assume no I/O bound
+            waitTime = waitTime > 50000000 ? waitTime : 0;
 
             int size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
             size = size > 0 ? size : 1;
+            size = Math.min(size, threadPoolExecutor.getMaximumPoolSize());
 
             // TODO remove debugging
             System.out.println(waitTime / 1000000 + " ms");
@@ -85,7 +87,6 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
 
             // TODO might want this to be 50%, 75%, etc. of max...
             threadPoolExecutor.setCorePoolSize(size);
-            threadPoolExecutor.setMaximumPoolSize(size);
         }
     }
 
@@ -145,8 +146,8 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
                         liveThreads.put(thisThread, tracking);
                     } else {
                         // compute exponential moving averages, see http://en.wikipedia.org/wiki/Exponential_smoothing
-                        tracking.avgTotalTime += 0.75 * (totalTime - tracking.avgTotalTime);
-                        tracking.avgCpuTime += 0.75 * (totalCpuTime - tracking.avgCpuTime);
+                        tracking.avgTotalTime += 0.50 * (totalTime - tracking.avgTotalTime);
+                        tracking.avgCpuTime += 0.50 * (totalCpuTime - tracking.avgCpuTime);
                     }
                 }
             }
