@@ -33,8 +33,9 @@ public class BenchMarkTest {
 
     private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
 
-    private static final int TOTAL_TASKS = 500;
+    private static final int TOTAL_TASKS = 500 * 8;
     private static final long MAX_WAIT = 15000;
+    private static final int MAX_THREADS = 500;
 
     @Ignore("ad-hoc profiling")
     @Test
@@ -99,7 +100,8 @@ public class BenchMarkTest {
         System.out.println("Using " + optimalPoolSize);
 
         long now = System.nanoTime();
-        ExecutorService executorService = Executors.newFixedThreadPool(optimalPoolSize); // 112?
+        ExecutorService executorService = Executors.newFixedThreadPool(optimalPoolSize); // 112? 288?
+        //ExecutorService executorService = Executors.newFixedThreadPool(400); // hard coded
         for(int i = 0; i < TOTAL_TASKS; i++) {
             executorService.submit(taskCreator.create());
         }
@@ -114,26 +116,8 @@ public class BenchMarkTest {
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeSupported());
         long now = System.nanoTime();
 
-        ThreadPoolExecutor tpe = new ThreadPoolExecutor(10, 200, 10, TimeUnit.MINUTES, new LinkedBlockingDeque<Runnable>());
-        final BalancingThreadPoolExecutor executorService = new BalancingThreadPoolExecutor(tpe, 1.0f, 4000);
-        Thread t = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                boolean done = false;
-                while(!done) {
-                    try {
-                        Thread.sleep(5000);
-                        executorService.balance();
-                    } catch (InterruptedException e) {
-                        Thread.interrupted();
-                        e.printStackTrace();
-                        done = true;
-                    }
-                }
-            }
-        });
-        t.setDaemon(true);
-        t.start();
+        ThreadPoolExecutor tpe = new ThreadPoolExecutor(100, MAX_THREADS, 10, TimeUnit.MINUTES, new LinkedBlockingDeque<Runnable>());
+        BalancingThreadPoolExecutor executorService = new BalancingThreadPoolExecutor(tpe, 1.0f);
 
         for(int i = 0; i < TOTAL_TASKS; i++) {
             executorService.submit(taskCreator.create());

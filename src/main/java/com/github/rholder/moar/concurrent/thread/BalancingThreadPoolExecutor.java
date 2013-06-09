@@ -25,6 +25,7 @@ import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Math.ceil;
 
@@ -43,12 +44,12 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
     private volatile long avgThreadTotalTime = 1;
 
     private float targetUtilization;
-    private long sampleMs;
 
     private ConcurrentHashMap<Thread, Tracking> liveThreads;
     private ThreadPoolExecutor threadPoolExecutor;
+    private AtomicInteger tasksRun;
 
-    public BalancingThreadPoolExecutor(ThreadPoolExecutor threadPoolExecutor, float targetUtilization, long sampleMs) {
+    public BalancingThreadPoolExecutor(ThreadPoolExecutor threadPoolExecutor, float targetUtilization) {
         if (targetUtilization <= 0.0 || targetUtilization > 1.0) {
             throw new IllegalArgumentException();
         }
@@ -59,35 +60,8 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
 
         this.threadPoolExecutor = threadPoolExecutor;
         this.targetUtilization = targetUtilization;
-        this.sampleMs = sampleMs;
         this.liveThreads = new ConcurrentHashMap<Thread, Tracking>();
-        initCollectorThread();
-    }
-
-    // TODO add regularly recurring balance() call thread
-    // TODO balance after N total tasks
-    public void balance() {
-        // only try to balance when we're not terminating
-        if(!isTerminated()) {
-            long cpuTime = getAvgThreadCpuTime();
-            long totalTime = getAvgThreadTotalTime();
-            long waitTime = totalTime - cpuTime;
-
-            // if waitTime per thread isn't at least 50 ms, then just assume no I/O bound
-            waitTime = waitTime > 50000000 ? waitTime : 0;
-
-            int size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
-            size = size > 0 ? size : 1;
-            size = Math.min(size, threadPoolExecutor.getMaximumPoolSize());
-
-            // TODO remove debugging
-            System.out.println(waitTime / 1000000 + " ms");
-            System.out.println(cpuTime / 1000000 + " ms");
-            System.out.println(size);
-
-            // TODO might want this to be 50%, 75%, etc. of max...
-            threadPoolExecutor.setCorePoolSize(size);
-        }
+        this.tasksRun = new AtomicInteger(0);
     }
 
     public long getAvgThreadCpuTime() {
@@ -149,48 +123,64 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
                         tracking.avgTotalTime += 0.50 * (totalTime - tracking.avgTotalTime);
                         tracking.avgCpuTime += 0.50 * (totalCpuTime - tracking.avgCpuTime);
                     }
+
+                    // TODO clean up this hack to update frequently and balance less frequently
+                    int count = tasksRun.getAndIncrement();
+                    if(count % 11 == 0) {
+                        update();
+                    }
+                    if(count % 51 == 0) {
+                        balance();
+                    }
                 }
             }
         });
     }
 
-    private void initCollectorThread() {
-        Thread collectorThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                boolean done = false;
-                while (!done) {
-                    try {
-                        Thread.sleep(sampleMs);
-                        Set<Map.Entry<Thread, Tracking>> threads = liveThreads.entrySet();
-                        long liveAvgTimeTotal = 0;
-                        long liveAvgCpuTotal = 0;
-                        long liveCount = 0;
-                        for (Map.Entry<Thread, Tracking> e : threads) {
-                            if (!e.getKey().isAlive()) {
-                                // thread is dead or otherwise hosed
-                                threads.remove(e);
-                            } else {
-                                liveAvgTimeTotal += e.getValue().avgTotalTime;
-                                liveAvgCpuTotal += e.getValue().avgCpuTime;
-                                liveCount++;
-                            }
-                        }
-                        if(liveCount > 0) {
-                            avgThreadTotalTime = liveAvgTimeTotal / liveCount;
-                            avgThreadCpuTime = liveAvgCpuTotal / liveCount;
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.interrupted();
-                        done = true;
-                    } catch (Throwable t) {
-                        t.printStackTrace();
-                    }
-                }
+    /**
+     * Update and clean up the collected thread metrics.
+     */
+    private void update() {
+        Set<Map.Entry<Thread, Tracking>> threads = liveThreads.entrySet();
+        long liveAvgTimeTotal = 0;
+        long liveAvgCpuTotal = 0;
+        long liveCount = 0;
+        for (Map.Entry<Thread, Tracking> e : threads) {
+            if (!e.getKey().isAlive()) {
+                // thread is dead or otherwise hosed
+                threads.remove(e);
+            } else {
+                liveAvgTimeTotal += e.getValue().avgTotalTime;
+                liveAvgCpuTotal += e.getValue().avgCpuTime;
+                liveCount++;
             }
-        });
+        }
+        if(liveCount > 0) {
+            avgThreadTotalTime = liveAvgTimeTotal / liveCount;
+            avgThreadCpuTime = liveAvgCpuTotal / liveCount;
+        }
+    }
 
-        collectorThread.setDaemon(true);
-        collectorThread.start();
+    /**
+     * Compute and set the optimal number of threads to use in this pool.
+     */
+    private void balance() {
+        // only try to balance when we're not terminating
+        if(!isTerminated()) {
+            long cpuTime = getAvgThreadCpuTime();
+            long totalTime = getAvgThreadTotalTime();
+            long waitTime = totalTime - cpuTime;
+
+            int size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
+            size = size > 0 ? size : 1;
+            size = Math.min(size, threadPoolExecutor.getMaximumPoolSize());
+
+            // TODO remove debugging
+            System.out.println(waitTime / 1000000 + " ms");
+            System.out.println(cpuTime / 1000000 + " ms");
+            System.out.println(size);
+
+            threadPoolExecutor.setCorePoolSize(size);
+        }
     }
 }
