@@ -57,7 +57,7 @@ dependencies {
     // junit testing
     testCompile "junit:junit:4.8.2"
     testCompile "org.mockito:mockito-all:1.9.0"
-    testCompile "backport-util-concurrent:backport-util-concurrent:3.1"
+    testCompile 'org.codehaus.jsr166-mirror:jsr166:1.7.0'
 }
 
 // enable Gradle Wrapper support for bootstrapping with specific version
