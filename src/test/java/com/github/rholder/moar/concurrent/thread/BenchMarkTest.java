@@ -16,6 +16,7 @@
 
 package com.github.rholder.moar.concurrent.thread;
 
+import com.github.rholder.moar.concurrent.StrategicExecutors;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -23,8 +24,7 @@ import org.junit.Test;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -100,8 +100,9 @@ public class BenchMarkTest {
         System.out.println("Using " + optimalPoolSize);
 
         long now = System.nanoTime();
-        ExecutorService executorService = Executors.newFixedThreadPool(optimalPoolSize); // 112? 288?
+        //ExecutorService executorService = Executors.newFixedThreadPool(optimalPoolSize); // 112? 288?
         //ExecutorService executorService = Executors.newFixedThreadPool(400); // hard coded
+        ExecutorService executorService = new ThreadPoolExecutor(MAX_THREADS, MAX_THREADS, 0L, TimeUnit.MILLISECONDS, new SynchronousQueue<Runnable>(), new CallerBlocksPolicy());
         for(int i = 0; i < TOTAL_TASKS; i++) {
             executorService.submit(taskCreator.create());
         }
@@ -114,11 +115,11 @@ public class BenchMarkTest {
     public void withBalancingThreadPoolExecutor(TaskCreator taskCreator) throws InterruptedException {
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeEnabled());
         Assert.assertTrue(THREAD_MX_BEAN.isThreadCpuTimeSupported());
+        THREAD_MX_BEAN.setThreadContentionMonitoringEnabled(true);
+        Assert.assertTrue(THREAD_MX_BEAN.isThreadContentionMonitoringEnabled());
         long now = System.nanoTime();
 
-        ThreadPoolExecutor tpe = new ThreadPoolExecutor(100, MAX_THREADS, 10, TimeUnit.MINUTES, new LinkedBlockingDeque<Runnable>());
-        BalancingThreadPoolExecutor executorService = new BalancingThreadPoolExecutor(tpe, 1.0f);
-
+        BalancingThreadPoolExecutor executorService = StrategicExecutors.newBalancingThreadPoolExecutor(MAX_THREADS, 1.0f);
         for(int i = 0; i < TOTAL_TASKS; i++) {
             executorService.submit(taskCreator.create());
         }

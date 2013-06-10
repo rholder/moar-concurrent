@@ -16,8 +16,6 @@
 
 package com.github.rholder.moar.concurrent.thread;
 
-import java.lang.management.ManagementFactory;
-import java.lang.management.ThreadMXBean;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,19 +35,23 @@ import static java.lang.Math.ceil;
  */
 public class BalancingThreadPoolExecutor extends AbstractExecutorService {
 
-    private static final ThreadMXBean THREAD_MX_BEAN = ManagementFactory.getThreadMXBean();
     private static final int CPUS = Runtime.getRuntime().availableProcessors();
 
-    private volatile long avgThreadCpuTime = 1;
-    private volatile long avgThreadTotalTime = 1;
+    private final float targetUtilization;
 
-    private float targetUtilization;
+    private final ConcurrentHashMap<Thread, Tracking> liveThreads;
+    private final ThreadPoolExecutor threadPoolExecutor;
+    private final ThreadProfiler threadProfiler;
+    private final AtomicInteger tasksRun;
+    private final float smoothingWeight;
+    private final int balanceAfter;
 
-    private ConcurrentHashMap<Thread, Tracking> liveThreads;
-    private ThreadPoolExecutor threadPoolExecutor;
-    private AtomicInteger tasksRun;
+    public BalancingThreadPoolExecutor(ThreadPoolExecutor threadPoolExecutor,
+                                       ThreadProfiler threadProfiler,
+                                       float targetUtilization,
+                                       float smoothingWeight,
+                                       int balanceAfter) {
 
-    public BalancingThreadPoolExecutor(ThreadPoolExecutor threadPoolExecutor, float targetUtilization) {
         if (targetUtilization <= 0.0 || targetUtilization > 1.0) {
             throw new IllegalArgumentException();
         }
@@ -59,17 +61,12 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
         }
 
         this.threadPoolExecutor = threadPoolExecutor;
+        this.threadProfiler = threadProfiler;
         this.targetUtilization = targetUtilization;
         this.liveThreads = new ConcurrentHashMap<Thread, Tracking>();
         this.tasksRun = new AtomicInteger(0);
-    }
-
-    public long getAvgThreadCpuTime() {
-        return avgThreadCpuTime;
-    }
-
-    public long getAvgThreadTotalTime() {
-        return avgThreadTotalTime;
+        this.smoothingWeight = smoothingWeight;
+        this.balanceAfter = balanceAfter;
     }
 
     @Override
@@ -104,14 +101,15 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
             @Override
             public void run() {
                 Thread thisThread = Thread.currentThread();
-                long startTime = System.nanoTime();
-                long startCpu = THREAD_MX_BEAN.getThreadCpuTime(thisThread.getId());
+                long threadId = thisThread.getId();
+                long startTime = threadProfiler.getThreadWaitTime(threadId);
+                long startCpu = threadProfiler.getThreadCpuTime(threadId);
                 try {
                     command.run();
                 } finally {
                     Tracking tracking = liveThreads.get(thisThread);
-                    long totalCpuTime = THREAD_MX_BEAN.getThreadCpuTime(thisThread.getId()) - startCpu;
-                    long totalTime = System.nanoTime() - startTime;
+                    long totalCpuTime = threadProfiler.getThreadCpuTime(threadId) - startCpu;
+                    long totalTime = threadProfiler.getThreadWaitTime(threadId) - startTime;
                     if(tracking == null) {
                         // this is an untracked thread, add tracking
                         tracking = new Tracking();
@@ -119,17 +117,14 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
                         tracking.avgCpuTime = totalCpuTime;
                         liveThreads.put(thisThread, tracking);
                     } else {
+                        // TODO determine exponential smoothing coefficient to specify weight of each task over time
                         // compute exponential moving averages, see http://en.wikipedia.org/wiki/Exponential_smoothing
-                        tracking.avgTotalTime += 0.50 * (totalTime - tracking.avgTotalTime);
-                        tracking.avgCpuTime += 0.50 * (totalCpuTime - tracking.avgCpuTime);
+                        tracking.avgTotalTime += smoothingWeight * (totalTime - tracking.avgTotalTime);
+                        tracking.avgCpuTime += smoothingWeight * (totalCpuTime - tracking.avgCpuTime);
                     }
 
-                    // TODO clean up this hack to update frequently and balance less frequently
                     int count = tasksRun.getAndIncrement();
-                    if(count % 11 == 0) {
-                        update();
-                    }
-                    if(count % 51 == 0) {
+                    if(count % balanceAfter == 0) {
                         balance();
                     }
                 }
@@ -138,47 +133,43 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
-     * Update and clean up the collected thread metrics.
-     */
-    private void update() {
-        Set<Map.Entry<Thread, Tracking>> threads = liveThreads.entrySet();
-        long liveAvgTimeTotal = 0;
-        long liveAvgCpuTotal = 0;
-        long liveCount = 0;
-        for (Map.Entry<Thread, Tracking> e : threads) {
-            if (!e.getKey().isAlive()) {
-                // thread is dead or otherwise hosed
-                threads.remove(e);
-            } else {
-                liveAvgTimeTotal += e.getValue().avgTotalTime;
-                liveAvgCpuTotal += e.getValue().avgCpuTime;
-                liveCount++;
-            }
-        }
-        if(liveCount > 0) {
-            avgThreadTotalTime = liveAvgTimeTotal / liveCount;
-            avgThreadCpuTime = liveAvgCpuTotal / liveCount;
-        }
-    }
-
-    /**
      * Compute and set the optimal number of threads to use in this pool.
      */
     private void balance() {
         // only try to balance when we're not terminating
         if(!isTerminated()) {
-            long cpuTime = getAvgThreadCpuTime();
-            long totalTime = getAvgThreadTotalTime();
-            long waitTime = totalTime - cpuTime;
+            Set<Map.Entry<Thread, Tracking>> threads = liveThreads.entrySet();
+            long liveAvgTimeTotal = 0;
+            long liveAvgCpuTotal = 0;
+            long liveCount = 0;
+            for (Map.Entry<Thread, Tracking> e : threads) {
+                if (!e.getKey().isAlive()) {
+                    // thread is dead or otherwise hosed
+                    threads.remove(e);
+                } else {
+                    liveAvgTimeTotal += e.getValue().avgTotalTime;
+                    liveAvgCpuTotal += e.getValue().avgCpuTime;
+                    liveCount++;
+                }
+            }
+            long totalTime = 1;
+            long cpuTime = 1;
+            if(liveCount > 0) {
+                totalTime = liveAvgTimeTotal / liveCount;
+                cpuTime = liveAvgCpuTotal / liveCount;
+            }
+
+            //long waitTime = totalTime - cpuTime;
+            long waitTime = totalTime;
 
             int size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
             size = size > 0 ? size : 1;
             size = Math.min(size, threadPoolExecutor.getMaximumPoolSize());
 
             // TODO remove debugging
-            System.out.println(waitTime / 1000000 + " ms");
-            System.out.println(cpuTime / 1000000 + " ms");
-            System.out.println(size);
+//            System.out.println(waitTime / 1000000 + " ms");
+//            System.out.println(cpuTime / 1000000 + " ms");
+//            System.out.println(size);
 
             threadPoolExecutor.setCorePoolSize(size);
         }
