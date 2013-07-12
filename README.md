@@ -9,16 +9,16 @@ assist in modeling complex or overly tweakable concurrent processing pipelines.
     <dependency>
       <groupId>com.github.rholder</groupId>
       <artifactId>moar-concurrent</artifactId>
-      <version>1.0.0</version>
+      <version>1.0.1</version>
     </dependency>
 
 ```
 ##Gradle
 ```groovy
-    compile "com.github.rholder:moar-concurrent:1.0.0"
+    compile "com.github.rholder:moar-concurrent:1.0.1"
 ```
 
-##Example
+##StrategicQueues
 When 85% of heap is in use, start exponentially delaying additional enqueues up
 to a max of 5000 ms, garbage collecting after every 10000 dequeues.
 ```java
@@ -27,6 +27,8 @@ to a max of 5000 ms, garbage collecting after every 10000 dequeues.
 
     strategicQueue.add("some queue stuff");
 ```
+
+##Documentation
 Javadoc can be found [here](http://rholder.github.com/moar-concurrent/).
 
 ##License
