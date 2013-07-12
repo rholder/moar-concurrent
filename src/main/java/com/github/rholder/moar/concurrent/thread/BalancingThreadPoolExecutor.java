@@ -152,24 +152,21 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
                     liveCount++;
                 }
             }
-            long totalTime = 1;
+            long waitTime = 1;
             long cpuTime = 1;
             if(liveCount > 0) {
-                totalTime = liveAvgTimeTotal / liveCount;
+                waitTime = liveAvgTimeTotal / liveCount;
                 cpuTime = liveAvgCpuTotal / liveCount;
             }
-
-            //long waitTime = totalTime - cpuTime;
-            long waitTime = totalTime;
 
             int size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
             size = size > 0 ? size : 1;
             size = Math.min(size, threadPoolExecutor.getMaximumPoolSize());
 
             // TODO remove debugging
-//            System.out.println(waitTime / 1000000 + " ms");
-//            System.out.println(cpuTime / 1000000 + " ms");
-//            System.out.println(size);
+            //System.out.println(waitTime / 1000000 + " ms");
+            //System.out.println(cpuTime / 1000000 + " ms");
+            //System.out.println(size);
 
             threadPoolExecutor.setCorePoolSize(size);
         }
