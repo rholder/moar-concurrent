@@ -1,5 +1,7 @@
 package com.github.rholder.moar.concurrent.iterator;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -17,7 +19,7 @@ import java.util.concurrent.Future;
  * Unprecedented calls to next() may result in spurious <code>null</code> returns, even though there are potentially
  * more elements to process.
  * <p>
- * It is generally a good idea to call {@link #destroy()} when finished with the iterator as outstanding
+ * It is generally a good idea to call {@link #close()} when finished with the iterator as outstanding
  * resources may not have been reclaimed due to exceptions or logical errors. Presumably if the end of iteration
  * is reached, all of the Spigots have terminated, but a <code>finally</code> is strongly recommended (shown
  * in the below example).
@@ -42,14 +44,15 @@ import java.util.concurrent.Future;
  *         System.out.println(s);
  *     }
  * } finally {
- *     // This makes sure that if an exception bubbles out
- *     sit.destroy();
+ *     // Be sure to clean up resources
+ *     sit.close();
+ *     executorService.shutdownNow();
  * }
  * </pre>
  *
  * @author Jason Dunkelberger (dirkraft)
  */
-public class StreamingIterator<T> implements Iterable<T>, Iterator<T> {
+public class StreamingIterator<T> implements Iterable<T>, Iterator<T>, Closeable {
 
     private final ArrayBlockingQueue<T> q;
     private final long patienceIntervalMs;
@@ -146,7 +149,7 @@ public class StreamingIterator<T> implements Iterable<T>, Iterator<T> {
         throw new RuntimeException("Not supported nor sensible.");
     }
 
-    public void destroy() {
+    public void close() throws IOException {
         for (SpigotWrapper spigot : spigots) {
             spigot.future.cancel(true);
         }
