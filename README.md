@@ -9,13 +9,13 @@ assist in modeling complex or overly tweakable concurrent processing pipelines.
     <dependency>
       <groupId>com.github.rholder</groupId>
       <artifactId>moar-concurrent</artifactId>
-      <version>1.0.1</version>
+      <version>1.0.2</version>
     </dependency>
 
 ```
 ##Gradle
 ```groovy
-    compile "com.github.rholder:moar-concurrent:1.0.1"
+    compile "com.github.rholder:moar-concurrent:1.0.2"
 ```
 
 ##StrategicQueues
