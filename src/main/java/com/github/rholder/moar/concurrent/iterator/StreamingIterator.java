@@ -1,11 +1,12 @@
 package com.github.rholder.moar.concurrent.iterator;
 
 import java.io.Closeable;
-import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
@@ -44,9 +45,8 @@ import java.util.concurrent.Future;
  *         System.out.println(s);
  *     }
  * } finally {
- *     // Be sure to clean up resources
+ *     // This makes sure that if an exception bubbles out
  *     sit.close();
- *     executorService.shutdownNow();
  * }
  * </pre>
  *
@@ -54,11 +54,11 @@ import java.util.concurrent.Future;
  */
 public class StreamingIterator<T> implements Iterable<T>, Iterator<T>, Closeable {
 
-    private final ArrayBlockingQueue<T> q;
+    private final BlockingQueue<T> q;
     private final long patienceIntervalMs;
     private final ExecutorService executorService;
 
-    private final List<SpigotWrapper> spigots = new ArrayList<SpigotWrapper>();
+    private final Set<SpigotWrapper> spigots = Collections.newSetFromMap(new ConcurrentHashMap<SpigotWrapper, Boolean>());
 
     /** All spigots drain to the BlockingQueue */
     private final Drain<T> drain = new Drain<T>() {
@@ -149,7 +149,10 @@ public class StreamingIterator<T> implements Iterable<T>, Iterator<T>, Closeable
         throw new RuntimeException("Not supported nor sensible.");
     }
 
-    public void close() throws IOException {
+    /**
+     * Forcibly {@link Future#cancel(boolean) cancels} all spigot futures. Does not
+     */
+    public void close() {
         for (SpigotWrapper spigot : spigots) {
             spigot.future.cancel(true);
         }
