@@ -159,8 +159,10 @@ public class BalancingThreadPoolExecutor extends AbstractExecutorService {
                 cpuTime = liveAvgCpuTotal / liveCount;
             }
 
-            int size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
-            size = size > 0 ? size : 1;
+            int size = 1;
+            if(cpuTime > 0) {
+                size = (int) ceil((CPUS * targetUtilization * (1 + (waitTime / cpuTime))));
+            }
             size = Math.min(size, threadPoolExecutor.getMaximumPoolSize());
 
             // TODO remove debugging
