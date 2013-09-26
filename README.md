@@ -29,8 +29,12 @@ to a max of 5000 ms, garbage collecting after every 10000 dequeues.
 ```
 
 ##Documentation
-Javadoc can be found [here](http://rholder.github.com/moar-concurrent/).
+Javadoc can be found [here](http://rholder.github.com/moar-concurrent/javadoc/1.0.2).
 
 ##License
 The moar-concurrent module is released under version 2.0 of the
 [Apache License](http://www.apache.org/licenses/LICENSE-2.0).
+
+##Contributors
+* Jason Dunkelberger (dirkraft)
+* Megan Galloway (megallo)
