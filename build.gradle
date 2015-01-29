@@ -1,79 +1,134 @@
 import org.gradle.api.artifacts.maven.MavenDeployment
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Settings
+ext {
+    project_group = 'com.github.rholder'
+    project_version = '1.0.3-SNAPSHOT'
+    project_jdk = '1.6'
+    project_pom = {
+        name 'moar-concurrent'
+        packaging 'jar'
+        description "This module contains a collection of useful builders and concurrency classes to assist in modeling complex or overly tweakable concurrent processing pipelines."
+        url 'http://rholder.github.com'
+
+        scm {
+            url 'scm:git@github.com:rholder/moar-concurrent.git'
+            connection 'scm:git@github.com:rholder/moar-concurrent.git'
+            developerConnection 'scm:git@github.com:rholder/moar-concurrent.git'
+        }
+
+        licenses {
+            license {
+                name 'The Apache Software License, Version 2.0'
+                url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution 'repo'
+            }
+        }
+
+        developers {
+            developer {
+                id 'rholder'
+                name 'Ray Holder'
+            }
+        }
+        //deployUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
+        deployUsername = sonatypeUsername
+        deployPassword = sonatypePassword
+    }
+
+    /** Function always returns a new manifest that can be customized */
+    defaultManifest = {
+        return manifest {
+            def git_cmd = "git rev-parse HEAD"
+            def git_proc = git_cmd.execute()
+            attributes 'SCM-Revision': git_proc.text.trim()
+            attributes 'Timestamp': String.valueOf(System.currentTimeMillis())
+            attributes 'Build-Host': InetAddress.localHost.hostName
+        }
+    }
+
+    defaultBlank = { closure ->
+        try {
+            closure()
+        } catch (MissingPropertyException e) {
+            ''
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Identifiers
+
+group = project_group
+version = project_version
+ext.isReleaseVersion = !version.endsWith("SNAPSHOT")
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Plugins
+
 apply plugin: 'java'
+sourceCompatibility = project_jdk
+targetCompatibility = project_jdk
+
 apply plugin: 'idea'
 apply plugin: 'maven'
 apply plugin: 'signing'
 
-sourceCompatibility = 1.6
-targetCompatibility = 1.6
-
-group = 'com.github.rholder'
-version = '1.0.3-SNAPSHOT'
-ext.packaging = 'jar'
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Dependencies
 
 repositories {
     mavenCentral()
 }
 
-configurations {
-    configRuntime {
-        extendsFrom runtime
+dependencies {
+    // junit testing
+    testCompile "junit:junit:4.12"
+    testCompile "org.mockito:mockito-all:1.10.19"
+    testCompile 'org.codehaus.jsr166-mirror:jsr166:1.7.0'
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Artifacts
+
+jar {
+    doFirst {
+        // Timestamp changes on every build. By evaluating it later, won't needlessly fail up-to-date checks.
+        manifest = defaultManifest()
     }
 }
 
-configurations.compile {
-    resolutionStrategy.cacheChangingModulesFor 0, "seconds"
-}
-
-sourceSets {
-    main {
-        compileClasspath += configurations.configRuntime
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from 'build/docs/javadoc'
+    doFirst {
+        // Timestamp changes on every build. By evaluating it later, won't needlessly fail up-to-date checks.
+        manifest = defaultManifest()
     }
 }
 
 task sourcesJar(type: Jar) {
-    from sourceSets.main.allSource
     classifier = 'sources'
-}
-
-task javadocJar(type: Jar, dependsOn: 'javadoc') {
-    from javadoc.destinationDir
-    classifier = 'javadoc'
-}
-
-task exportJavadoc(type: Copy, dependsOn: 'javadoc') {
-    from javadoc.destinationDir
-    into 'javadoc'
+    from sourceSets.main.allSource
+    doFirst {
+        // Timestamp changes on every build. By evaluating it later, won't needlessly fail up-to-date checks.
+        manifest = defaultManifest()
+    }
 }
 
 artifacts {
     archives jar
-    archives sourcesJar
     archives javadocJar
+    archives sourcesJar
 }
 
-dependencies {
-    // junit testing
-    testCompile "junit:junit:4.8.2"
-    testCompile "org.mockito:mockito-all:1.9.0"
-    testCompile 'org.codehaus.jsr166-mirror:jsr166:1.7.0'
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Publishing
 
-// enable Gradle Wrapper support for bootstrapping with specific version
-task wrapper(type: Wrapper) {
-    gradleVersion = '2.2.1'
-}
-
-//********* artifact signing *********
-if(gradle.startParameter.taskNames.contains("uploadArchives")) {
-    signing {
-        sign configurations.archives
-    }
-} else {
-    task signArchives {
-        // do nothing
-    }
+signing {
+    required { isReleaseVersion && gradle.taskGraph.hasTask("uploadArchives") }
+    sign configurations.archives
 }
 
 uploadArchives {
@@ -84,44 +139,40 @@ uploadArchives {
             mavenDeployer {
                 beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
 
-                repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
-                    authentication(userName: sonatypeUsername, password: sonatypePassword)
+                //# ./gradlew -PdeployUrl=http://server/artifactory/repo -PdeployUsername=admin -PdeployPassword=pass uploadArchives
+                // for snapshots https://oss.sonatype.org/content/repositories/snapshots
+                // for staging/release https://oss.sonatype.org/service/local/staging/deploy/maven2
+                repository(
+                        url: defaultBlank({ deployUrl })
+                ) {
+                    // If these are not defined assemble needlessly fails for unrelated tasks, hence, defaultBlank.
+                    authentication(userName: defaultBlank({ deployUsername }), password: defaultBlank({ deployPassword }))
                 }
 
-                pom.project {
-                    name 'moar-concurrent'
-                    packaging 'jar'
-                    description "This module contains a collection of useful builders and concurrency classes to assist in modeling complex or overly tweakable concurrent processing pipelines."
-                    url 'http://rholder.github.com'
-
-                    scm {
-                        url 'scm:git@github.com:rholder/moar-concurrent.git'
-                        connection 'scm:git@github.com:rholder/moar-concurrent.git'
-                        developerConnection 'scm:git@github.com:rholder/moar-concurrent.git'
-                    }
-
-                    licenses {
-                        license {
-                            name 'The Apache Software License, Version 2.0'
-                            url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                            distribution 'repo'
-                        }
-                    }
-
-                    developers {
-                        developer {
-                            id 'rholder'
-                            name 'Ray Holder'
-                        }
-                    }
-                }
+                pom.project project_pom
             }
         }
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Utilities
+
+// enable Gradle Wrapper support for bootstrapping with specific version
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.2.1'
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// IDE
+
 idea {
     module {
-        scopes.PROVIDED.plus += configurations.configRuntime
+        downloadSources = true
+    }
+    project {
+        jdkName = project_jdk
+        languageLevel = project_jdk
+        vcs = 'Git'
     }
 }
