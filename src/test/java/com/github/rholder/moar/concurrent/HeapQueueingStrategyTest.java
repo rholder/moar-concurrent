@@ -16,7 +16,7 @@
 
 package com.github.rholder.moar.concurrent;
 
-import junit.framework.Assert;
+import org.junit.Assert;
 import org.junit.Test;
 
 public class HeapQueueingStrategyTest {
@@ -75,6 +75,6 @@ public class HeapQueueingStrategyTest {
         }
         long underEnd = System.currentTimeMillis();
         Assert.assertTrue("Expected queueing after heap threshold was acceptable again to be at least twice as fast.",
-                (2*(underEnd - underStart)) < (overEnd - overStart));
+                (2 * (underEnd - underStart)) < (overEnd - overStart));
     }
 }
