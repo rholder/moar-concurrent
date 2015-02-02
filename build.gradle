@@ -133,24 +133,20 @@ signing {
 
 uploadArchives {
     repositories {
-        if (version.contains("SNAPSHOT")) {
-            mavenLocal()
-        } else {
-            mavenDeployer {
-                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
 
-                //# ./gradlew -PdeployUrl=http://server/artifactory/repo -PdeployUsername=admin -PdeployPassword=pass uploadArchives
-                // for snapshots https://oss.sonatype.org/content/repositories/snapshots
-                // for staging/release https://oss.sonatype.org/service/local/staging/deploy/maven2
-                repository(
-                        url: defaultBlank({ deployUrl })
-                ) {
-                    // If these are not defined assemble needlessly fails for unrelated tasks, hence, defaultBlank.
-                    authentication(userName: defaultBlank({ deployUsername }), password: defaultBlank({ deployPassword }))
-                }
-
-                pom.project project_pom
+            //# ./gradlew -PdeployUrl=http://server/artifactory/repo -PdeployUsername=admin -PdeployPassword=pass uploadArchives
+            // for snapshots https://oss.sonatype.org/content/repositories/snapshots
+            // for staging/release https://oss.sonatype.org/service/local/staging/deploy/maven2
+            repository(
+                    url: defaultBlank({ deployUrl })
+            ) {
+                // If these are not defined assemble needlessly fails for unrelated tasks, hence, defaultBlank.
+                authentication(userName: defaultBlank({ deployUsername }), password: defaultBlank({ deployPassword }))
             }
+
+            pom.project project_pom
         }
     }
 }
