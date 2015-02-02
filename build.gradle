@@ -32,9 +32,11 @@ ext {
                 name 'Ray Holder'
             }
         }
+
+        // default to Maven Central staging
         deployUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2'
-        deployUsername = defaultBlank({ sonatypeUsername })
-        deployPassword = defaultBlank({ sonatypePassword })
+        deployUsername = ext.defaultBlank({ sonatypeUsername })
+        deployPassword = ext.defaultBlank({ sonatypePassword })
     }
 
     /** Function always returns a new manifest that can be customized */
