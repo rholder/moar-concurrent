@@ -26,21 +26,22 @@ public class Parts {
 
     /**
      * Return a list of {@link Part}'s between two values split up into equal
-     * partitions up to the last chunk that may contain a range of length <= the
+     * partitions up to the last chunk that may contain a range of length &lt;= the
      * given chunk size.
-     * <p/>
+     *
      * For instance, a start of 23 and end of 43 with a chunkSize of 10 would
      * result in the following list of returned parts:
      * <pre>
      * [23, 32], [33, 42], [43, 43]
      * </pre>
+     *
      * Notice that the final chunk contains the same start and end. This should
      * be expected in cases where the last chunk would only contain one value.
      *
      * @param start     starting value of the range to partition
      * @param end       starting value of the range to partition
      * @param chunkSize partition the range in chunks of this size, with the
-     *                  last chunk containing <= this value
+     *                  last chunk containing &lt;= this value
      * @return a list of {@link Part}'s
      */
     public static List<Part> between(long start, long end, long chunkSize) {
@@ -50,8 +51,8 @@ public class Parts {
     /**
      * Return a list of {@link Part}'s where the total length is split up into
      * equal partitions up to the last chunk that may contain a range of length
-     * <= the given chunk size.
-     * <p/>
+     * &lt;= the given chunk size.
+     *
      * For instance, a totalLength of 73 and a chunkSize of 22 would result in
      * the following list of returned parts:
      * <pre>
@@ -60,7 +61,7 @@ public class Parts {
      *
      * @param totalLength the total length of the range to partition
      * @param chunkSize   partition the range in chunks of this size, with the
-     *                    last chunk containing <= this value
+     *                    last chunk containing &lt;= this value
      * @return a list of {@link Part}'s
      */
     public static List<Part> among(long totalLength, long chunkSize) {
@@ -70,21 +71,21 @@ public class Parts {
     /**
      * Return a list of {@link Part}'s with the given offset where the total
      * length is split up into equal partitions up to the last chunk that may
-     * contain a range of length <= the given chunk size.
-     * <p/>
+     * contain a range of length &lt;= the given chunk size.
+     *
      * For instance, an offset of 23 and total length of 21 with a chunkSize of
      * 10 would result in the following list of returned parts:
      * <pre>
      * [23, 32], [33, 42], [43, 43]
      * </pre>
-     * <p/>
+     *
      * Notice that the final chunk contains the same start and end. This should
      * be expected in cases where the last chunk would only contain one value.
      *
      * @param offset      add this offset to the start and end of the calculated {@link Part}'s
      * @param totalLength the total length of the range to partition
      * @param chunkSize   partition the range in chunks of this size, with the
-     *                    last chunk containing <= this value
+     *                    last chunk containing &lt;= this value
      * @return a list of {@link Part}'s
      */
     public static List<Part> among(long offset, long totalLength, long chunkSize) {
